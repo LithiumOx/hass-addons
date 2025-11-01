@@ -44,11 +44,9 @@ INITIAL_ADMIN_KEY="$(read_option_string 'initial_admin_key' '')"
 ALLOW_KEYLESS="$(read_option_bool 'allow_keyless' 'false')"
 ANON_ACCESS="$(read_option_string 'anon_access' 'read')"
 
-# Seed initial admin key on first boot
-if [ ! -f "$SOFT_SERVE_DATA_PATH/config.yaml" ]; then
-  if [ -n "$INITIAL_ADMIN_KEY" ]; then
-    export SOFT_SERVE_INITIAL_ADMIN_KEYS="$INITIAL_ADMIN_KEY"
-  fi
+# Seed/ensure admin key is provided to Soft Serve
+if [ -n "$INITIAL_ADMIN_KEY" ]; then
+  export SOFT_SERVE_INITIAL_ADMIN_KEYS="$INITIAL_ADMIN_KEY"
 fi
 
 # Harden defaults from add-on options
