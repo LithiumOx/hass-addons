@@ -1,0 +1,24 @@
+name: "Soft Serve Git Server"
+slug: "soft_serve"
+description: "Self-hosted Git server (SSH + HTTP/LFS) by Charmbracelet"
+version: "0.1.0"
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: services
+init: false
+stage: stable
+ports:
+  "23231/tcp": 23231 # SSH (git+ssh and TUI over SSH)
+  "23232/tcp": 23232 # HTTP (optional; for git/LFS over HTTP)
+map:
+  - data:rw # persists under /data/addons/data/<slug>/
+options:
+  initial_admin_key: "" # paste your ~/.ssh/id_ed25519.pub here on first run
+  allow_keyless: false # disable password-less/unknown key access
+  anon_access: "read" # "none" | "read"
+schema:
+  initial_admin_key: str
+  allow_keyless: bool
+  anon_access: list(none|read)
