@@ -1,7 +1,7 @@
 name: "Soft Serve Git Server"
 slug: "soft_serve"
 description: "Self-hosted Git server (SSH + HTTP/LFS) by Charmbracelet"
-version: "0.1.2"
+version: "0.1.3"
 arch:
   - amd64
   - aarch64

@@ -10,23 +10,39 @@ export SOFT_SERVE_DATA_PATH="${SOFT_SERVE_DATA_PATH:-/data/soft-serve}"
 
 mkdir -p "$SOFT_SERVE_DATA_PATH"
 
-# Read configuration provided via the add-on UI
-INITIAL_ADMIN_KEY=""
-if bashio::config.has_value 'initial_admin_key'; then
-  INITIAL_ADMIN_KEY="$(bashio::config 'initial_admin_key')"
-fi
+# Path provided by Supervisor with the current add-on options
+CONFIG_PATH="${CONFIG_PATH:-/data/options.json}"
 
-ALLOW_KEYLESS="false"
-if bashio::config.has_value 'allow_keyless'; then
-  if bashio::config.true 'allow_keyless'; then
-    ALLOW_KEYLESS="true"
+read_option_string() {
+  local key="$1" default="$2" value
+  if [ -f "$CONFIG_PATH" ]; then
+    value="$(jq -r --arg key "$key" '.[$key] // empty' "$CONFIG_PATH" 2>/dev/null || true)"
+    if [ -n "$value" ]; then
+      printf '%s' "$value"
+      return
+    fi
   fi
-fi
+  printf '%s' "$default"
+}
 
-ANON_ACCESS="read"
-if bashio::config.has_value 'anon_access'; then
-  ANON_ACCESS="$(bashio::config 'anon_access')"
-fi
+read_option_bool() {
+  local key="$1" default="$2" value
+  if [ -f "$CONFIG_PATH" ]; then
+    value="$(jq -r --arg key "$key" '.[$key]' "$CONFIG_PATH" 2>/dev/null || true)"
+    case "$value" in
+      true|false)
+        printf '%s' "$value"
+        return
+        ;;
+    esac
+  fi
+  printf '%s' "$default"
+}
+
+# Read configuration provided via the add-on UI
+INITIAL_ADMIN_KEY="$(read_option_string 'initial_admin_key' '')"
+ALLOW_KEYLESS="$(read_option_bool 'allow_keyless' 'false')"
+ANON_ACCESS="$(read_option_string 'anon_access' 'read')"
 
 # Seed initial admin key on first boot
 if [ ! -f "$SOFT_SERVE_DATA_PATH/config.yaml" ]; then
