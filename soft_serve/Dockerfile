@@ -6,8 +6,8 @@ FROM ghcr.io/charmbracelet/soft-serve:latest AS softserve
 FROM ${BUILD_FROM}
 COPY --from=softserve /usr/local/bin/soft /usr/local/bin/soft
 
-# Minimal runtime deps (git for hooks and repo ops) plus bashio for option parsing
-RUN apk add --no-cache git bash bashio
+# Minimal runtime deps (git for hooks and repo ops)
+RUN apk add --no-cache git bash
 
 # Add entrypoint
 COPY run.sh /run.sh
