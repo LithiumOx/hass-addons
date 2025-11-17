@@ -1,7 +1,7 @@
 name: "Soft Serve Git Server"
 slug: "soft_serve"
 description: "Self-hosted Git server (SSH + HTTP/LFS) by Charmbracelet"
-version: "0.1.4"
+version: "0.2.0"
 arch:
   - amd64
   - aarch64
@@ -16,9 +16,81 @@ map:
   - data:rw # persists under /data/addons/data/<slug>/
 options:
   initial_admin_key: "" # paste your ~/.ssh/id_ed25519.pub here on first run
-  allow_keyless: false # disable password-less/unknown key access
-  anon_access: "read" # "none" | "read"
+  allow_keyless: true # match the upstream default behavior
+  anon_access: "read-only" # "no-access" | "read-only" | "read-write" | "admin-access"
+  name: "Soft Serve"
+  log_format: "text"
+  ssh_listen_addr: ":23231"
+  ssh_public_url: "ssh://localhost:23231"
+  ssh_key_path: "ssh/soft_serve_host"
+  ssh_client_key_path: "ssh/soft_serve_client"
+  ssh_max_timeout: 0
+  ssh_idle_timeout: 120
+  git_listen_addr: ":9418"
+  git_max_timeout: 0
+  git_idle_timeout: 3
+  git_max_connections: 32
+  http_listen_addr: ":23232"
+  http_tls_key_path: ""
+  http_tls_cert_path: ""
+  http_public_url: "http://localhost:23232"
+  http_cors_allowed_headers:
+    - "Accept"
+    - "Accept-Language"
+    - "Content-Language"
+    - "Content-Type"
+    - "Origin"
+    - "X-Requested-With"
+    - "User-Agent"
+    - "Authorization"
+    - "Access-Control-Request-Method"
+    - "Access-Control-Allow-Origin"
+  http_cors_allowed_origins:
+    - "http://localhost:23232"
+  http_cors_allowed_methods:
+    - "GET"
+    - "HEAD"
+    - "POST"
+    - "PUT"
+    - "OPTIONS"
+  db_driver: "sqlite"
+  db_data_source: "soft-serve.db?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
+  lfs_enabled: true
+  lfs_ssh_enabled: false
+  jobs_mirror_pull: "@every 10m"
+  stats_listen_addr: ":23233"
+  additional_admin_keys: []
 schema:
   initial_admin_key: str
   allow_keyless: bool
-  anon_access: list(none|read)
+  anon_access: list(no-access|read-only|read-write|admin-access)
+  name: str
+  log_format: list(json|logfmt|text)
+  ssh_listen_addr: str
+  ssh_public_url: str
+  ssh_key_path: str
+  ssh_client_key_path: str
+  ssh_max_timeout: int
+  ssh_idle_timeout: int
+  git_listen_addr: str
+  git_max_timeout: int
+  git_idle_timeout: int
+  git_max_connections: int
+  http_listen_addr: str
+  http_tls_key_path: str
+  http_tls_cert_path: str
+  http_public_url: str
+  http_cors_allowed_headers:
+    - str
+  http_cors_allowed_origins:
+    - str
+  http_cors_allowed_methods:
+    - str
+  db_driver: list(sqlite|postgres)
+  db_data_source: str
+  lfs_enabled: bool
+  lfs_ssh_enabled: bool
+  jobs_mirror_pull: str
+  stats_listen_addr: str
+  additional_admin_keys:
+    - str
