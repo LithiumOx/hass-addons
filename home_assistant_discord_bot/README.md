@@ -27,3 +27,5 @@ The bot also keeps Discord updated while idle:
 - Set `guild_id` for fast slash-command registration.
 - Set `channel_id` to the Plex bot channel for command restriction and the
   managed status message.
+- In that channel, allow the HomeAssistant bot/role to view the channel, send
+  messages, embed links, and read message history.

@@ -184,12 +184,20 @@ class RocketStatusService:
     async def snapshot(self) -> RocketStatus:
         online_state = await self.ha.get_state(self.config.rocket_online_entity)
         online_raw = online_state.get("state") if online_state else None
-        online = online_raw == "on"
-        online_source = self.config.rocket_online_entity
+        plex_port_open = await self._plex_port_open()
 
-        if not state_is_available(online_raw):
-            online = await self._plex_port_open()
+        if plex_port_open:
+            online = True
             online_source = f"{self.config.rocket_host}:{self.config.plex_port}"
+        elif online_raw == "on":
+            online = False
+            online_source = (
+                f"{self.config.rocket_online_entity}=on, "
+                f"{self.config.rocket_host}:{self.config.plex_port}=closed"
+            )
+        else:
+            online = False
+            online_source = self.config.rocket_online_entity
 
         tautulli_state = await self.ha.get_state(self.config.tautulli_up_entity)
         tautulli_raw = tautulli_state.get("state") if tautulli_state else None
@@ -327,9 +335,17 @@ class RocketWakeBot(discord.Client):
         if self.last_status_message_online == status.online:
             return
 
-        channel = self.get_channel(self.config.channel_id)
-        if channel is None:
-            channel = await self.fetch_channel(self.config.channel_id)
+        try:
+            channel = self.get_channel(self.config.channel_id)
+            if channel is None:
+                channel = await self.fetch_channel(self.config.channel_id)
+        except discord.Forbidden:
+            LOGGER.warning(
+                "Missing Discord access to configured status channel %s",
+                self.config.channel_id,
+            )
+            self.last_status_message_online = status.online
+            return
 
         description = format_status(status)
         embed = discord.Embed(
@@ -341,21 +357,29 @@ class RocketWakeBot(discord.Client):
 
         message_id = self.read_status_message_id()
         message = None
-        if message_id is not None and hasattr(channel, "fetch_message"):
-            try:
-                message = await channel.fetch_message(message_id)
-            except discord.NotFound:
-                message = None
+        try:
+            if message_id is not None and hasattr(channel, "fetch_message"):
+                try:
+                    message = await channel.fetch_message(message_id)
+                except discord.NotFound:
+                    message = None
 
-        content = "Rocket Plex is online." if status.online else "Rocket Plex is offline."
-        if message is None:
-            if not hasattr(channel, "send"):
-                LOGGER.warning("Configured Discord channel cannot receive status messages")
-                return
-            message = await channel.send(content=content, embed=embed)
-            self.write_status_message_id(message.id)
-        else:
-            await message.edit(content=content, embed=embed)
+            content = "Rocket Plex is online." if status.online else "Rocket Plex is offline."
+            if message is None:
+                if not hasattr(channel, "send"):
+                    LOGGER.warning("Configured Discord channel cannot receive status messages")
+                    return
+                message = await channel.send(content=content, embed=embed)
+                self.write_status_message_id(message.id)
+            else:
+                await message.edit(content=content, embed=embed)
+        except discord.Forbidden:
+            LOGGER.warning(
+                "Missing Discord permission to send or edit status messages in channel %s",
+                self.config.channel_id,
+            )
+            self.last_status_message_online = status.online
+            return
 
         LOGGER.info(
             "Discord channel status message updated online=%s message_id=%s",

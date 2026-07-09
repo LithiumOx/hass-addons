@@ -32,3 +32,7 @@ The activity text says whether Rocket Plex is online or offline.
 When `channel_id` is set, the bot creates or edits one status message in that
 channel. The message uses a green embed while Rocket is online and a red embed
 while Rocket is offline.
+
+The bot/role must be allowed to view the configured channel, send messages,
+embed links, and read message history. If the channel is private, add the
+HomeAssistant bot or its role to the channel permissions.
