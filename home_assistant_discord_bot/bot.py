@@ -30,6 +30,10 @@ class ConfigError(RuntimeError):
     pass
 
 
+class HomeAssistantUnavailable(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class Config:
     discord_bot_token: str
@@ -160,20 +164,34 @@ class HomeAssistantClient:
 
     async def get_state(self, entity_id: str) -> dict[str, Any] | None:
         url = f"{SUPERVISOR_CORE_API}/states/{entity_id}"
-        async with self.session.get(url, headers=self.headers, timeout=10) as response:
-            if response.status == 404:
-                return None
-            response.raise_for_status()
-            payload = await response.json()
+        try:
+            async with self.session.get(url, headers=self.headers, timeout=5) as response:
+                if response.status == 404:
+                    return None
+                if response.status in (502, 503, 504):
+                    raise HomeAssistantUnavailable(
+                        f"Home Assistant API returned HTTP {response.status}"
+                    )
+                response.raise_for_status()
+                payload = await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            raise HomeAssistantUnavailable(str(exc)) from exc
         return payload if isinstance(payload, dict) else None
 
     async def call_script(self, entity_id: str) -> None:
         url = f"{SUPERVISOR_CORE_API}/services/script/turn_on"
         payload = {"entity_id": entity_id}
-        async with self.session.post(
-            url, headers=self.headers, json=payload, timeout=15
-        ) as response:
-            response.raise_for_status()
+        try:
+            async with self.session.post(
+                url, headers=self.headers, json=payload, timeout=10
+            ) as response:
+                if response.status in (502, 503, 504):
+                    raise HomeAssistantUnavailable(
+                        f"Home Assistant API returned HTTP {response.status}"
+                    )
+                response.raise_for_status()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            raise HomeAssistantUnavailable(str(exc)) from exc
 
 
 class RocketStatusService:
@@ -182,13 +200,21 @@ class RocketStatusService:
         self.ha = ha
 
     async def snapshot(self) -> RocketStatus:
-        online_state = await self.ha.get_state(self.config.rocket_online_entity)
+        ha_error: str | None = None
+        try:
+            online_state = await self.ha.get_state(self.config.rocket_online_entity)
+        except HomeAssistantUnavailable as exc:
+            online_state = None
+            ha_error = str(exc) or "unavailable"
         online_raw = online_state.get("state") if online_state else None
         plex_port_open = await self._plex_port_open()
 
         if plex_port_open:
             online = True
             online_source = f"{self.config.rocket_host}:{self.config.plex_port}"
+        elif ha_error is not None:
+            online = False
+            online_source = f"home-assistant-api={ha_error}"
         elif online_raw == "on":
             online = False
             online_source = (
@@ -199,14 +225,32 @@ class RocketStatusService:
             online = False
             online_source = self.config.rocket_online_entity
 
-        tautulli_state = await self.ha.get_state(self.config.tautulli_up_entity)
+        if ha_error is not None:
+            return RocketStatus(
+                online=online,
+                online_source=online_source,
+                plex_available=None,
+                streams=None,
+                transcodes=None,
+            )
+
+        try:
+            tautulli_state = await self.ha.get_state(self.config.tautulli_up_entity)
+            streams_state = await self.ha.get_state(self.config.plex_streams_entity)
+            transcodes_state = await self.ha.get_state(self.config.plex_transcodes_entity)
+        except HomeAssistantUnavailable as exc:
+            return RocketStatus(
+                online=online,
+                online_source=f"{online_source}, metrics=home-assistant-api:{exc}",
+                plex_available=None,
+                streams=None,
+                transcodes=None,
+            )
+
         tautulli_raw = tautulli_state.get("state") if tautulli_state else None
         plex_available = None
         if state_is_available(tautulli_raw):
             plex_available = tautulli_raw in ("1", "on", "true", "True")
-
-        streams_state = await self.ha.get_state(self.config.plex_streams_entity)
-        transcodes_state = await self.ha.get_state(self.config.plex_transcodes_entity)
 
         return RocketStatus(
             online=online,
@@ -406,10 +450,22 @@ class RocketWakeBot(discord.Client):
             json.dump({"message_id": str(message_id)}, handle)
 
     async def handle_start(self, interaction: discord.Interaction) -> None:
+        LOGGER.info(
+            "Received /%s interaction channel_id=%s user_id=%s",
+            self.config.command_name,
+            interaction.channel_id,
+            interaction.user.id if interaction.user else "?",
+        )
         if (
             self.config.channel_id is not None
             and interaction.channel_id != self.config.channel_id
         ):
+            LOGGER.info(
+                "Rejected /%s interaction from channel %s; configured channel is %s",
+                self.config.command_name,
+                interaction.channel_id,
+                self.config.channel_id,
+            )
             await interaction.response.send_message(
                 "Use this in the configured Rocket/Plex bot channel.",
                 ephemeral=True,
@@ -424,7 +480,17 @@ class RocketWakeBot(discord.Client):
             await interaction.edit_original_response(content=format_status(before))
             return
 
-        await self.status_service.wake()
+        try:
+            await self.status_service.wake()
+        except HomeAssistantUnavailable as exc:
+            await interaction.edit_original_response(
+                content=(
+                    "Home Assistant is not accepting the wake command right now, "
+                    f"so I could not wake Rocket. Last status: {before.online_source}. "
+                    f"Error: {exc}"
+                )
+            )
+            return
         await interaction.edit_original_response(
             content="Sent Rocket wake command through Home Assistant. Waiting for Plex..."
         )
