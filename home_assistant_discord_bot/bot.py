@@ -15,6 +15,7 @@ from discord import app_commands
 
 
 OPTIONS_PATH = "/data/options.json"
+STATUS_MESSAGE_PATH = "/data/status_message.json"
 SUPERVISOR_CORE_API = "http://supervisor/core/api"
 COMMAND_NAME_PATTERN = re.compile(r"^[a-z0-9_-]{1,32}$")
 
@@ -260,6 +261,8 @@ class RocketWakeBot(discord.Client):
         self.status_service = status_service
         self.tree = app_commands.CommandTree(self)
         self.presence_task: asyncio.Task[None] | None = None
+        self.last_presence_online: bool | None = None
+        self.last_status_message_online: bool | None = None
 
         async def start_command(interaction: discord.Interaction) -> None:
             await self.handle_start(interaction)
@@ -298,8 +301,9 @@ class RocketWakeBot(discord.Client):
             try:
                 status = await self.status_service.snapshot()
                 await self.apply_presence(status)
+                await self.publish_status_message(status)
             except Exception:
-                LOGGER.exception("Failed to update Discord presence")
+                LOGGER.exception("Failed to update Discord status")
             await asyncio.sleep(self.config.status_interval_seconds)
 
     async def apply_presence(self, status: RocketStatus) -> None:
@@ -309,6 +313,73 @@ class RocketWakeBot(discord.Client):
             status=discord_status,
             activity=discord.Activity(type=discord.ActivityType.watching, name=text),
         )
+        if self.last_presence_online != status.online:
+            LOGGER.info(
+                "Discord presence updated online=%s source=%s",
+                status.online,
+                status.online_source,
+            )
+            self.last_presence_online = status.online
+
+    async def publish_status_message(self, status: RocketStatus) -> None:
+        if self.config.channel_id is None:
+            return
+        if self.last_status_message_online == status.online:
+            return
+
+        channel = self.get_channel(self.config.channel_id)
+        if channel is None:
+            channel = await self.fetch_channel(self.config.channel_id)
+
+        description = format_status(status)
+        embed = discord.Embed(
+            title="Rocket Plex status",
+            description=description,
+            color=0x2ECC71 if status.online else 0xE74C3C,
+        )
+        embed.set_footer(text=f"Source: {status.online_source}")
+
+        message_id = self.read_status_message_id()
+        message = None
+        if message_id is not None and hasattr(channel, "fetch_message"):
+            try:
+                message = await channel.fetch_message(message_id)
+            except discord.NotFound:
+                message = None
+
+        content = "Rocket Plex is online." if status.online else "Rocket Plex is offline."
+        if message is None:
+            if not hasattr(channel, "send"):
+                LOGGER.warning("Configured Discord channel cannot receive status messages")
+                return
+            message = await channel.send(content=content, embed=embed)
+            self.write_status_message_id(message.id)
+        else:
+            await message.edit(content=content, embed=embed)
+
+        LOGGER.info(
+            "Discord channel status message updated online=%s message_id=%s",
+            status.online,
+            message.id,
+        )
+        self.last_status_message_online = status.online
+
+    def read_status_message_id(self) -> int | None:
+        try:
+            with open(STATUS_MESSAGE_PATH, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return None
+        message_id = payload.get("message_id") if isinstance(payload, dict) else None
+        if isinstance(message_id, int):
+            return message_id
+        if isinstance(message_id, str) and message_id.isdigit():
+            return int(message_id)
+        return None
+
+    def write_status_message_id(self, message_id: int) -> None:
+        with open(STATUS_MESSAGE_PATH, "w", encoding="utf-8") as handle:
+            json.dump({"message_id": str(message_id)}, handle)
 
     async def handle_start(self, interaction: discord.Interaction) -> None:
         if (

@@ -6,7 +6,7 @@ This add-on runs a small Discord bot inside Home Assistant.
 
 - `discord_bot_token`: Discord bot token. Keep this secret.
 - `guild_id`: Discord server ID. Recommended so slash command updates are immediate.
-- `channel_id`: Optional Discord channel ID. If set, the slash command only works there.
+- `channel_id`: Optional Discord channel ID. If set, the slash command only works there and the bot keeps one managed status message there.
 - `command_name`: Slash command name. Default: `on`.
 - `status_interval_seconds`: How often the bot updates its Discord presence.
 - `wake_timeout_seconds`: How long `/start` waits for Rocket to report online.
@@ -26,3 +26,9 @@ The bot uses Discord status as the simple red/green indicator:
 - red/do-not-disturb: Rocket is offline
 
 The activity text says whether Rocket Plex is online or offline.
+
+## Discord Status Message
+
+When `channel_id` is set, the bot creates or edits one status message in that
+channel. The message uses a green embed while Rocket is online and a red embed
+while Rocket is offline.
