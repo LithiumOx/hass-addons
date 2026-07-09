@@ -8,6 +8,7 @@ defaults and persistent storage under `/data/addons/data/<slug>`.
 
 | Add-on | Service | Description |
 | --- | --- | --- |
+| [`home_assistant_discord_bot`](home_assistant_discord_bot) | Discord bot | Slash command for waking Rocket Plex through Home Assistant. |
 | [`soft_serve`](soft_serve) | [Charm Soft Serve](https://github.com/charmbracelet/soft-serve) | Self-hostable Git server with SSH, HTTP/LFS, and an SSH-accessible TUI. |
 
 Install this repository under **Settings → Add-ons → Add-on Store → Repositories**

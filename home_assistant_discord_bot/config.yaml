@@ -1,0 +1,40 @@
+name: "Home Assistant Discord Bot"
+version: "0.1.0"
+slug: "home_assistant_discord_bot"
+description: "Discord slash command for waking Rocket Plex through Home Assistant."
+url: "https://github.com/LithiumOx/hass-addons/tree/main/home_assistant_discord_bot"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+homeassistant_api: true
+options:
+  discord_bot_token: ""
+  guild_id: ""
+  channel_id: ""
+  command_name: "on"
+  status_interval_seconds: 30
+  wake_timeout_seconds: 180
+  rocket_online_entity: "binary_sensor.rocket_online"
+  rocket_wake_script: "script.rocket_wake"
+  tautulli_up_entity: "sensor.rocket_tautulli_up"
+  plex_streams_entity: "sensor.rocket_plex_streams"
+  plex_transcodes_entity: "sensor.rocket_plex_transcodes"
+  rocket_host: "192.168.1.22"
+  plex_port: 32400
+schema:
+  discord_bot_token: "password"
+  guild_id: "str"
+  channel_id: "str"
+  command_name: "str"
+  status_interval_seconds: "int"
+  wake_timeout_seconds: "int"
+  rocket_online_entity: "str"
+  rocket_wake_script: "str"
+  tautulli_up_entity: "str"
+  plex_streams_entity: "str"
+  plex_transcodes_entity: "str"
+  rocket_host: "str"
+  plex_port: "int"
